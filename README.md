@@ -1,182 +1,114 @@
-# TurboQuant Java Runtime
+# turboquant-java-runtime
 
-Backend-agnostic Java 17 runtime for TurboQuant quantisation kernels.
-Supports **CUDA**, **HIP/ROCm**, and a pure-Java **CPU stub** — all behind a
-single clean Java API.
+Experimental Java 17 runtime for TurboQuant-oriented inference backend experiments.
+
+This project aims to provide a **backend-agnostic Java runtime** for future TurboQuant-style inference integration, with an architecture that can evolve across:
+
+- CPU stub
+- CUDA backends
+- HIP / ROCm backends
+
+The current focus is **runtime architecture and backend extensibility**, not a full production TurboQuant implementation.
 
 ---
 
-## Quick start
+## Status
 
-```bash
-# Build everything (requires JDK 17+, Maven 3.9+)
-mvn clean install -DskipTests
+**Project stage:** Pre-alpha / experimental
 
-# Run the bench CLI against the CPU stub (always works, no GPU needed)
-java -jar tq-bench-cli/target/tq-bench-cli-0.1.0-SNAPSHOT-fat.jar
+### What works today
 
-# List all discovered backends
-java -jar tq-bench-cli/target/tq-bench-cli-0.1.0-SNAPSHOT-fat.jar --list
+- Java 17 multi-module runtime structure
+- Backend-agnostic public API
+- `ServiceLoader`-based backend discovery
+- Pure Java `cpu-stub` backend for local development
+- CUDA backend placeholder with native bridge shape
+- HIP / ROCm backend placeholder with matching structure
+- Bench CLI skeleton
+- Stable shared native C ABI header: `tq_native_api.h`
 
-# Force a specific backend
-java -jar tq-bench-cli/target/tq-bench-cli-0.1.0-SNAPSHOT-fat.jar --backend cpu-stub
+### What does *not* exist yet
 
-# Enable the HIP backend (requires libtq_hip.so on java.library.path)
-java -Dtq.backend.hip.enabled=true \
-     -Djava.library.path=/opt/rocm/lib \
-     -jar tq-bench-cli/target/tq-bench-cli-0.1.0-SNAPSHOT-fat.jar --backend hip
-```
+- Full TurboQuant algorithm implementation
+- Production-ready CUDA kernels
+- Production-ready HIP / ROCm kernels
+- Real model inference integration
+- Verified end-to-end TurboQuant benchmarks
+- Production stability guarantees
+
+If you are looking for a ready-to-use TurboQuant implementation, this repository is **not there yet**.
+
+---
+
+## Why this project exists
+
+Most Java AI projects stop at the application layer.
+
+This repository explores a different direction:
+
+- a Java-callable runtime layer
+- pluggable native backends
+- unified API across CPU / CUDA / HIP
+- future support for quantisation-oriented inference experiments
+- an architecture that can later be integrated into larger systems such as **Halo Cloud**
+
+The goal is to make it easier to experiment with **Java + native inference backends + future TurboQuant-style optimization paths** without binding the Java API to one specific GPU vendor.
+
+---
+
+## Design goals
+
+- **Backend-agnostic Java API**
+- **Low-cost future ROCm porting**
+- **Stable native ABI**
+- **Clean separation between API, SPI, core runtime, and native backends**
+- **CPU-first local development path**
+- **CUDA-first validation path**
+- **HIP / ROCm expansion path later**
+
+---
+
+## Architecture
+
+At a high level, the project is split into four layers:
+
+### 1. Public API
+Java-facing interfaces and data models.
+
+Examples:
+- `Backend`
+- `ComputeSession`
+- `TensorHandle`
+- `BackendConfig`
+
+### 2. SPI
+Backend extension points discovered via `ServiceLoader`.
+
+### 3. Runtime core
+Backend selection, discovery, lifecycle, and orchestration.
+
+### 4. Native backends
+Vendor-specific or runtime-specific implementations:
+- `tq-backend-cpu-stub`
+- `tq-backend-cuda`
+- `tq-backend-hip`
+
+The Java API should remain stable even as native backends evolve.
 
 ---
 
 ## Project layout
 
-```
+```text
 turboquant-java-runtime/
-├── pom.xml                        Parent POM, dependency management
-│
-├── tq-runtime-api/                Public Java API (no GPU vendor imports)
-│   └── com.turboquant.runtime.api
-│       ├── Backend                Top-level backend interface
-│       ├── ComputeSession         Scoped session (alloc, upload, quantise, …)
-│       ├── TensorHandle           Opaque tensor (device or heap)
-│       ├── BackendConfig          Immutable config bag
-│       ├── BackendCapability      Capability enum
-│       ├── DType                  FLOAT32 / BFLOAT16 / INT8 / UINT4
-│       └── BackendException       Unchecked runtime exception
-│
-├── tq-runtime-spi/                ServiceLoader SPI (BackendProvider)
-│
-├── tq-runtime-core/               Discovery engine + RuntimeEngine facade
-│   └── com.turboquant.runtime.core
-│       ├── BackendRegistry        ServiceLoader wrapper, priority sort
-│       └── RuntimeEngine          Main entry point for app code
-│
-├── tq-backend-cpu-stub/           Pure-Java stub; always available
-├── tq-backend-cuda/               JNI bridge to libtq_cuda.so
-├── tq-backend-hip/                JNI bridge to libtq_hip.so (disabled by default)
-│
-├── tq-bench-cli/                  Picocli bench tool (fat JAR)
-├── tq-spring-boot-starter/        Spring Boot 3 auto-configuration
-│
+├── pom.xml
+├── tq-runtime-api/
+├── tq-runtime-spi/
+├── tq-runtime-core/
+├── tq-backend-cpu-stub/
+├── tq-backend-cuda/
+├── tq-backend-hip/
+├── tq-bench-cli/
+├── tq-spring-boot-starter/
 └── include/
-    └── tq_native_api.h            Stable C ABI implemented by every native backend
-```
-
----
-
-## Module dependency graph
-
-```
-tq-runtime-api   (no deps)
-      ↑
-tq-runtime-spi   (api)
-      ↑
-tq-runtime-core  (api, spi)          ← ServiceLoader discovery lives here
-      ↑                ↑
-tq-bench-cli     tq-spring-boot-starter
-      ↑
-tq-backend-cpu-stub / tq-backend-cuda / tq-backend-hip
-                    (api, spi)
-```
-
-Backend modules only depend on `tq-runtime-api` + `tq-runtime-spi`.
-`tq-runtime-core` has **no** compile-time dependency on any backend —
-backends are discovered at runtime via `ServiceLoader`.
-
----
-
-## Backend selection
-
-Priority order (highest wins):
-
-| Backend        | Priority | Available | Notes                          |
-|----------------|----------|-----------|--------------------------------|
-| `cuda`         | 80       | if `libtq_cuda.so` found | CUDA 11+ |
-| `hip`          | 80       | if `libtq_hip.so` found **and** `-Dtq.backend.hip.enabled=true` | ROCm 6+ |
-| `cpu-stub`     | 0        | always    | Pure Java, no GPU needed       |
-
-When two backends have the same priority the one with the lexicographically
-smaller name wins (deterministic tie-breaking).
-
-Override at runtime:
-
-```java
-// Auto-select
-RuntimeEngine engine = RuntimeEngine.autoSelect(BackendConfig.defaultConfig());
-
-// Explicit
-RuntimeEngine engine = RuntimeEngine.withBackend("cuda",
-    BackendConfig.builder().deviceIndex(1).build());
-```
-
----
-
-## Spring Boot usage
-
-Add to your application POM:
-
-```xml
-<dependency>
-  <groupId>com.turboquant</groupId>
-  <artifactId>tq-spring-boot-starter</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
-</dependency>
-<!-- at least one backend must be on the runtime classpath -->
-<dependency>
-  <groupId>com.turboquant</groupId>
-  <artifactId>tq-backend-cpu-stub</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
-</dependency>
-```
-
-`application.properties`:
-
-```properties
-turboquant.backend=auto
-turboquant.device-index=0
-```
-
-Inject the beans:
-
-```java
-@Autowired RuntimeEngine engine;   // initialised, ready to use
-@Autowired Backend        backend;  // the active backend
-```
-
----
-
-## Adding a new backend
-
-1. Create a Maven module depending on `tq-runtime-api` + `tq-runtime-spi`.
-2. Implement `BackendProvider` and `Backend` / `ComputeSession` / `TensorHandle`.
-3. Register the provider in `META-INF/services/com.turboquant.runtime.spi.BackendProvider`.
-4. Add the module as an optional dependency in `tq-bench-cli` / your app.
-
-No changes to `tq-runtime-core` or any other existing module are required.
-
----
-
-## Native library (C ABI)
-
-The header `include/tq_native_api.h` defines the stable C ABI.
-See [docs/architecture.md](docs/architecture.md) for the design rationale.
-
-To implement a native backend:
-
-```bash
-# Generate JNI header from the Java bridge class
-javac -h include/ tq-backend-cuda/src/main/java/com/turboquant/backend/cuda/CudaNativeBridge.java
-
-# Implement the generated header against tq_native_api.h
-# Build: produces libtq_cuda.so / libtq_hip.so
-```
-
----
-
-## Requirements
-
-- JDK 17 or later
-- Maven 3.9+
-- (Optional) CUDA Toolkit 11+ for `tq-backend-cuda`
-- (Optional) ROCm 6+ for `tq-backend-hip`
+    └── tq_native_api.h
