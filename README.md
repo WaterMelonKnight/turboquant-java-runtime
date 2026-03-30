@@ -45,7 +45,7 @@ Application / Spring Boot
   C ABI (tq_native_api.h) → libtq_cuda.so / libtq_hip.so
 ```
 
-The only component that currently executes real inference is `tq-backend-cpu-stub`, which is a deterministic pure-Java stub used for development and testing.
+`tq-backend-cpu-stub` is the only backend that currently completes the full runtime call path. It does so using deterministic stub logic — a seeded integer sequence and a simulated KV cache — not real model weights or a real forward pass. No backend in this repository performs actual language model inference yet.
 
 ---
 
@@ -198,7 +198,7 @@ turboquant-java-runtime/
 ### Build and run tests
 
 ```bash
-git clone https://github.com/your-org/turboquant-java-runtime.git
+git clone https://github.com/WaterMelonKnight/turboquant-java-runtime.git
 cd turboquant-java-runtime
 mvn clean install
 ```
@@ -380,7 +380,21 @@ Native contributions (C/CUDA/HIP) targeting the `native/cuda/` or
 
 ## License
 
-> **No license has been chosen yet.**
-> Choose MIT or Apache-2.0 before making this repository public.
-> Until a license is added, default copyright law applies and no usage
-> rights are granted to third parties.
+This project is licensed under the **Apache License, Version 2.0**.
+See the [LICENSE](LICENSE) file for the full license text.
+
+```
+Copyright 2025 WaterMelonKnight
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```
