@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.turboquant</groupId>
+    <artifactId>turboquant-java-runtime</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>tq-backend-hip</artifactId>
+  <name>TurboQuant :: Backend :: HIP (ROCm)</name>
+  <description>
+    HIP/ROCm backend placeholder. Structurally identical to tq-backend-cuda.
+    isAvailable() returns false unless the system property
+    tq.backend.hip.enabled=true is set, or the -Phip Maven profile is active.
+    Activate with: mvn ... -Phip -Dtq.backend.hip.enabled=true
+  </description>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.turboquant</groupId>
+      <artifactId>tq-runtime-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.turboquant</groupId>
+      <artifactId>tq-runtime-spi</artifactId>
+    </dependency>
+  </dependencies>
+</project>

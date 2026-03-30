@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.turboquant.backend.cpu.CpuSessionLifecycleTest
+-------------------------------------------------------------------------------
+Tests run: 28, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.031 s -- in com.turboquant.backend.cpu.CpuSessionLifecycleTest

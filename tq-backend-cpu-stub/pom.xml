@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.turboquant</groupId>
+    <artifactId>turboquant-java-runtime</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>tq-backend-cpu-stub</artifactId>
+  <name>TurboQuant :: Backend :: CPU Stub</name>
+  <description>
+    Pure-Java CPU stub backend. Always available; no native library required.
+    Useful for CI, unit tests, and environments without a GPU.
+    Kernels are not optimised — this is a correctness scaffold only.
+  </description>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.turboquant</groupId>
+      <artifactId>tq-runtime-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.turboquant</groupId>
+      <artifactId>tq-runtime-spi</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>
