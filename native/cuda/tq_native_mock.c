@@ -11,6 +11,11 @@
  * are comparable between the Java-stub and C-stub paths.
  */
 
+/* clock_gettime / CLOCK_MONOTONIC require _POSIX_C_SOURCE >= 199309L.
+ * Define it before any system header so the feature-test macro takes effect
+ * even when compiled with -std=c99. */
+#define _POSIX_C_SOURCE 199309L
+
 #include "tq_native_api.h"
 
 #include <stdint.h>

@@ -62,10 +62,10 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # Strip the "lib" prefix on Windows to match System.loadLibrary("tq_cuda").
-set_target_properties(tq_cuda PROPERTIES
-    PREFIX ""
-    OUTPUT_NAME "tq_cuda"
-)
+# set_target_properties(tq_cuda PROPERTIES
+#     PREFIX ""
+#     OUTPUT_NAME "tq_cuda"
+# )
 
 # ---------------------------------------------------------------------------
 # Install rule (optional — copy into a well-known location)

@@ -1,0 +1,7 @@
+/workspace/turboquant-java-runtime/native/hip/build/CMakeFiles/tq_hip.dir
+/workspace/turboquant-java-runtime/native/hip/build/CMakeFiles/edit_cache.dir
+/workspace/turboquant-java-runtime/native/hip/build/CMakeFiles/rebuild_cache.dir
+/workspace/turboquant-java-runtime/native/hip/build/CMakeFiles/list_install_components.dir
+/workspace/turboquant-java-runtime/native/hip/build/CMakeFiles/install.dir
+/workspace/turboquant-java-runtime/native/hip/build/CMakeFiles/install/local.dir
+/workspace/turboquant-java-runtime/native/hip/build/CMakeFiles/install/strip.dir

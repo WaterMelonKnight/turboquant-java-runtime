@@ -64,10 +64,10 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # Strip the "lib" prefix on Windows to match System.loadLibrary("tq_hip").
-set_target_properties(tq_hip PROPERTIES
-    PREFIX ""
-    OUTPUT_NAME "tq_hip"
-)
+# set_target_properties(tq_hip PROPERTIES
+#     PREFIX ""
+#     OUTPUT_NAME "tq_hip"
+# )
 
 # ---------------------------------------------------------------------------
 # Install rule
