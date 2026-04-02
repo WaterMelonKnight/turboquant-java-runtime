@@ -36,5 +36,12 @@
       <artifactId>llama</artifactId>
       <version>${llama.java.version}</version>
     </dependency>
+
+    <!-- tq-runtime-core needed by the optional smoke test -->
+    <dependency>
+      <groupId>com.turboquant</groupId>
+      <artifactId>tq-runtime-core</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 </project>

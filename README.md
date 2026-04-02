@@ -6,7 +6,7 @@ A backend-agnostic Java 17 runtime foundation for future TurboQuant-oriented inf
 
 ## Status
 
-> **Pre-alpha / experimental.** This repository is an architecture skeleton. The CPU stub backend works and all unit tests pass. CUDA and HIP/ROCm backends are placeholder structures with no real GPU kernels. There is no production-ready inference implementation. Do not use in production.
+> **Pre-alpha / experimental.** The architecture is established and a real end-to-end inference path exists via the `tq-backend-llamacpp` module (llama.cpp, CPU mode). The CPU stub backend also works and all unit tests pass. CUDA and HIP/ROCm backends remain placeholder structures with no real GPU kernels. There is no production-ready implementation. Do not use in production.
 
 ---
 
@@ -19,6 +19,7 @@ A backend-agnostic Java 17 runtime foundation for future TurboQuant-oriented inf
 - [Architecture overview](#architecture-overview)
 - [Project layout](#project-layout)
 - [Quick start](#quick-start)
+- [Experimental real inference path (llama.cpp)](#experimental-real-inference-path-llamacpp)
 - [Native ABI](#native-abi)
 - [Roadmap](#roadmap)
 - [Notes on TurboQuant](#notes-on-turboquant)
@@ -40,12 +41,13 @@ Application / Spring Boot
         ↓
   tq-runtime-core     ← backend selection, lifecycle, ServiceLoader discovery
         ↓
-  tq-backend-*        ← cpu-stub / cuda / hip implementations
+  tq-backend-*        ← cpu-stub / llamacpp / cuda / hip implementations
         ↓
   C ABI (tq_native_api.h) → libtq_cuda.so / libtq_hip.so
+  llama.cpp JAR binding  → bundled native libs (de.kherud:llama)
 ```
 
-`tq-backend-cpu-stub` is the only backend that currently completes the full runtime call path. It does so using deterministic stub logic — a seeded integer sequence and a simulated KV cache — not real model weights or a real forward pass. No backend in this repository performs actual language model inference yet.
+`tq-backend-cpu-stub` uses deterministic stub logic — a seeded integer sequence and a simulated KV cache — not real model weights. `tq-backend-llamacpp` loads a local GGUF model file via the `de.kherud:llama` Java binding and runs real text generation. CUDA and HIP backends are placeholder structures only.
 
 ---
 
@@ -59,7 +61,9 @@ Application / Spring Boot
 | `DefaultTurboQuantRuntime` with auto-selection | Working |
 | CPU stub backend — deterministic LCG inference | Working |
 | KV cache simulation (stub) | Working |
-| Bench CLI (`tq-bench-cli`) against CPU stub | Working |
+| llama.cpp backend — real GGUF model loading and text generation | Working (CPU mode) |
+| Bench CLI (`tq-bench-cli`) — CPU stub and llama.cpp | Working |
+| `SessionConfig` with `modelPath`, `maxContextTokens`, `temperature`, `topP` | Working |
 | Spring Boot 3 auto-configuration starter | Working |
 | Stable C ABI header (`include/tq_native_api.h`) | Working |
 | CUDA backend Java class structure + JNI bridge shape | Placeholder |
@@ -74,13 +78,13 @@ Application / Spring Boot
 - Real CUDA kernels or a working `libtq_cuda.so`
 - Real HIP/ROCm kernels or a working `libtq_hip.so`
 - Any actual quantization algorithm (TurboQuant or otherwise)
-- Real model weights or a model-loading pipeline
-- End-to-end inference against a real language model
-- Verified performance benchmarks on real hardware
+- GPU-offloaded llama.cpp inference (current path is CPU-only)
+- Tokenizer integration outside of what llama.cpp handles internally
+- Verified performance benchmarks on real GPU hardware
 - Production stability, error recovery, or observability
 - JPMS (`module-info.java`) descriptors
 
-If you need a working GPU inference runtime today, this repository is not there yet.
+If you need a production-grade GPU inference runtime, this repository is not there yet.
 
 ---
 
@@ -114,21 +118,18 @@ See [docs/architecture.md](docs/architecture.md) for the full explanation. The s
 │    BackendRegistry → ServiceLoader → DefaultRuntime   │
 └───────────────────────┬──────────────────────────────┘
                         │  BackendProvider SPI
-         ┌──────────────┼──────────────┐
-         │              │              │
-┌────────▼────┐  ┌──────▼─────┐  ┌────▼───────────┐
-│ cpu-stub    │  │   cuda     │  │   hip          │
-│ (pure Java) │  │ (JNI shim) │  │ (JNI shim)     │
-└─────────────┘  └──────┬─────┘  └────┬───────────┘
-                         │             │
-               ┌─────────▼─────────────▼──────┐
-               │    C ABI: tq_native_api.h     │
-               └─────────┬─────────────┬──────┘
-                          │             │
-                 ┌────────▼──┐  ┌───────▼──┐
-                 │libtq_cuda │  │libtq_hip │
-                 │(mock/real)│  │(mock/real│
-                 └───────────┘  └──────────┘
+         ┌──────────────┼──────────────┬──────────────┐
+         │              │              │              │
+┌────────▼────┐  ┌──────▼──────┐  ┌───▼────┐  ┌─────▼──────┐
+│ cpu-stub    │  │ llamacpp    │  │  cuda  │  │   hip      │
+│ (pure Java) │  │ (real infer)│  │ (JNI)  │  │ (JNI)      │
+└─────────────┘  └──────┬──────┘  └───┬────┘  └─────┬──────┘
+                         │             │             │
+                  de.kherud:llama  C ABI: tq_native_api.h
+                  (bundled .so)   ┌────▼─────────────▼──┐
+                                  │libtq_cuda / libtq_hip│
+                                  │   (mock / future)    │
+                                  └──────────────────────┘
 ```
 
 **Key properties:**
@@ -154,6 +155,7 @@ turboquant-java-runtime/
 │       ├── TurboQuantRuntime.java
 │       ├── InferenceRequest.java
 │       ├── InferenceResult.java
+│       ├── SessionConfig.java
 │       ├── KvCacheStats.java
 │       └── …
 │
@@ -163,11 +165,11 @@ turboquant-java-runtime/
 │
 ├── tq-backend-cpu-stub/           ← working CPU stub (LCG, KV cache sim)
 │
+├── tq-backend-llamacpp/           ← real inference via de.kherud:llama (CPU mode)
+│
 ├── tq-backend-cuda/               ← placeholder: Java shape + JNI bridge
-│   └── native/cuda/               ← compilable mock C ABI + JNI bridge
 │
 ├── tq-backend-hip/                ← placeholder: Java shape + JNI bridge
-│   └── native/hip/                ← compilable mock C ABI + JNI bridge
 │
 ├── tq-bench-cli/                  ← picocli bench harness
 │
@@ -182,7 +184,8 @@ turboquant-java-runtime/
 │
 └── docs/
     ├── architecture.md
-    └── rocm-porting-plan.md
+    ├── rocm-porting-plan.md
+    └── llamacpp-smoke-test.md
 ```
 
 ---
@@ -247,7 +250,7 @@ java -jar tq-bench-cli/target/tq-bench-cli-*-fat.jar --list
 import com.turboquant.runtime.api.*;
 import com.turboquant.runtime.core.DefaultTurboQuantRuntime;
 
-try (TurboQuantRuntime rt = DefaultTurboQuantRuntime.autoSelect(BackendConfig.defaults())) {
+try (TurboQuantRuntime rt = DefaultTurboQuantRuntime.autoSelect(BackendConfig.defaultConfig())) {
     InferenceRequest req = InferenceRequest.syntheticPrompt(128, 32);
     InferenceResult  res = rt.infer(req);
     System.out.println("Backend : " + res.backendName());
@@ -305,9 +308,72 @@ java -Dtq.backend.hip.enabled=true \
 > HIP is disabled by default to avoid spurious load attempts on CUDA-only hosts.
 > Set `-Dtq.backend.hip.enabled=true` to enable.
 
+### llama.cpp path (real inference — CPU mode)
+
+```bash
+# Build the fat JAR (includes tq-backend-llamacpp)
+mvn clean package -pl tq-bench-cli -am
+
+# Run with a local GGUF model
+java -jar tq-bench-cli/target/tq-bench-cli-*-fat.jar \
+  --backend llama.cpp \
+  --model-path /path/to/model.gguf \
+  --prompt "Once upon a time" \
+  --max-new-tokens 64 \
+  --context 2048 \
+  --warmup 1 --iters 5
+```
+
+The `de.kherud:llama` JAR bundles native llama.cpp binaries for Linux, macOS, and Windows. No separate installation is required. Current validated mode is **CPU-only**; GPU offload via llama.cpp is not yet wired up in this project.
+
+See [docs/llamacpp-smoke-test.md](docs/llamacpp-smoke-test.md) for model preparation notes and optional smoke test instructions.
+
 ---
 
-## Native ABI
+## Experimental real inference path (llama.cpp)
+
+The `tq-backend-llamacpp` module provides the first real end-to-end inference path in this project. It uses the [`de.kherud:llama`](https://github.com/kherud/java-llama.cpp) Java binding to load a local GGUF model and generate text.
+
+**This is experimental and CPU-only.** It is not optimised, not benchmarked on production hardware, and not intended for production use.
+
+### How it works
+
+1. `LlamaCppBackend.init(SessionConfig)` loads the GGUF model via `LlamaModel(ModelParameters)`.
+2. `LlamaCppSession.infer(InferenceRequest)` runs `model.generate(InferenceParameters)`, collecting output tokens into `InferenceResult.generatedText()`.
+3. The result is returned through the same `TurboQuantRuntime.infer()` call path used by the CPU stub.
+
+The Java API sees no llama.cpp types — `tq-runtime-api` is still vendor-neutral.
+
+### Smoke run result
+
+The following is a single local benchmark run included to demonstrate that the path works. It is **not** a reproducible performance claim.
+
+```
+Environment : Linux x86_64, CPU-only (no GPU offload)
+Model       : Qwen2.5-0.5B-Instruct (Q4_0 GGUF)
+Context     : 2048 tokens
+Max new tok : 32
+Warmup      : 2 iterations
+Timed iters : 10
+
+Latency (ms):
+  mean  :   3559.747 ms
+  min   :   3198.628 ms
+  p50   :   3499.755 ms
+  p99   :   4003.212 ms
+  max   :   4003.212 ms
+Throughput  :        9.3 tok/s  (generated, CPU-only)
+Generated tokens : 33
+Backend     : llama.cpp
+```
+
+**Observations:**
+- llama.cpp loaded successfully; no GPU offload was used or available in the test environment.
+- The warning "Not compiled with GPU offload support" from llama.cpp is expected in a CPU-only build.
+- Throughput of ~9 tok/s for a 0.5B Q4_0 model on CPU is consistent with llama.cpp reference numbers.
+- CUDA and HIP backends in this repository are unrelated to this path — they remain placeholder structures.
+
+---
 
 The file `include/tq_native_api.h` is the portability contract between the
 Java JNI bridges and the native backend implementations.
@@ -344,8 +410,8 @@ ROCm porting checklist.
 
 See [ROADMAP.md](ROADMAP.md) for the versioned plan. In brief:
 
-- **v0.1** (current) — architecture baseline, CPU stub, stable ABI shape
-- **v0.2** — real inference path: model loading, tokenizer, real forward pass
+- **v0.1** (done) — architecture baseline, CPU stub, stable ABI shape
+- **v0.2** (in progress) — real inference path: llama.cpp CPU mode working; tokenizer and GPU offload TBD
 - **v0.3** — experimental quantization integration
 - **Later** — real CUDA kernels, real HIP/ROCm kernels, Kubernetes demo
 - **Possible future** — Halo Cloud integration

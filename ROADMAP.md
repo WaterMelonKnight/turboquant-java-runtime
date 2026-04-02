@@ -6,12 +6,12 @@ The project is pre-alpha — phases may be reordered or reprioritised.
 
 ---
 
-## v0.1 — Architecture baseline (current)
+## v0.1 — Architecture baseline (done)
 
 **Goal:** Establish a working multi-module structure that compiles, tests, and demonstrates the full layering from Java API down to a native C ABI, without requiring any GPU hardware.
 
 - [x] Java 17 multi-module Maven build
-- [x] Stable public API (`tq-runtime-api`): `Backend`, `ComputeSession`, `TensorHandle`, `InferenceRequest`, `InferenceResult`, `KvCacheStats`
+- [x] Stable public API (`tq-runtime-api`): `Backend`, `ComputeSession`, `TensorHandle`, `InferenceRequest`, `InferenceResult`, `KvCacheStats`, `SessionConfig`
 - [x] `BackendProvider` SPI and `ServiceLoader`-based backend discovery
 - [x] `DefaultTurboQuantRuntime` with auto-selection and named-backend lookup
 - [x] `tq-backend-cpu-stub`: deterministic LCG inference, simulated KV cache
@@ -26,17 +26,21 @@ The project is pre-alpha — phases may be reordered or reprioritised.
 
 ---
 
-## v0.2 — Real inference path
+## v0.2 — Real inference path (in progress)
 
-**Goal:** Replace the CPU stub's LCG placeholder with an actual forward pass — even a trivial one — so the project can demonstrate real model input/output.
+**Goal:** Provide a working end-to-end inference path against a real language model. The first milestone — loading a local GGUF model and generating text via llama.cpp — is complete.
 
-- [ ] Tokenizer integration (SentencePiece or HuggingFace tokenizers-java, TBD)
-- [ ] Model weight loading (GGUF or SafeTensors reader, TBD)
-- [ ] Real CPU forward pass for a small transformer (e.g. TinyStories-class model)
-- [ ] `InferenceRequest` driven by real text input, not synthetic token IDs
-- [ ] Proper KV cache implementation in the CPU path
-- [ ] Update bench CLI to accept text prompts
-- [ ] Integration test: load weights → tokenize → infer → detokenize → assert non-empty output
+- [x] `tq-backend-llamacpp` module using `de.kherud:llama` Java binding
+- [x] `SessionConfig` with `modelPath`, `maxContextTokens`, `maxNewTokens`, `temperature`, `topP`
+- [x] `InferenceRequest.fromText(prompt, maxNewTokens)` for text-native backends
+- [x] `InferenceResult.generatedText()` for raw text output
+- [x] Bench CLI `--model-path`, `--prompt`, `--context`, `--max-new-tokens` options
+- [x] Smoke run validated: Qwen2.5-0.5B-Instruct Q4_0, CPU-only, ~9 tok/s
+- [x] Optional `LlamaCppSmokeTest` (skipped unless `-Dtq.test.llamacpp.model=...` is set)
+- [ ] GPU offload via llama.cpp `nGpuLayers` (requires a system with a supported GPU)
+- [ ] Proper KV cache metrics surfaced from llama.cpp internals
+- [ ] Tokenizer integration for prompt token count reporting
+- [ ] Integration test with a bundled tiny model (no large file dependency)
 
 ---
 
