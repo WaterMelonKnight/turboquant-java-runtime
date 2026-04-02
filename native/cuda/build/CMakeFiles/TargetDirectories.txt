@@ -1,7 +1,0 @@
-/workspace/turboquant-java-runtime/native/cuda/build/CMakeFiles/tq_cuda.dir
-/workspace/turboquant-java-runtime/native/cuda/build/CMakeFiles/edit_cache.dir
-/workspace/turboquant-java-runtime/native/cuda/build/CMakeFiles/rebuild_cache.dir
-/workspace/turboquant-java-runtime/native/cuda/build/CMakeFiles/list_install_components.dir
-/workspace/turboquant-java-runtime/native/cuda/build/CMakeFiles/install.dir
-/workspace/turboquant-java-runtime/native/cuda/build/CMakeFiles/install/local.dir
-/workspace/turboquant-java-runtime/native/cuda/build/CMakeFiles/install/strip.dir

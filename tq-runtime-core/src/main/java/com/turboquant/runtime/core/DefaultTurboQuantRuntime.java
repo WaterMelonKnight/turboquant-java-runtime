@@ -7,6 +7,7 @@ import com.turboquant.runtime.api.ComputeSession;
 import com.turboquant.runtime.api.InferenceRequest;
 import com.turboquant.runtime.api.InferenceResult;
 import com.turboquant.runtime.api.KvCacheStats;
+import com.turboquant.runtime.api.SessionConfig;
 import com.turboquant.runtime.api.TurboQuantRuntime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +51,14 @@ public final class DefaultTurboQuantRuntime implements TurboQuantRuntime {
                 backend.name(), config);
     }
 
+    private DefaultTurboQuantRuntime(Backend backend, SessionConfig config) {
+        backend.init(config);
+        this.backend = backend;
+        this.session = backend.newSession();
+        log.info("DefaultTurboQuantRuntime ready — backend='{}', sessionConfig={}",
+                backend.name(), config);
+    }
+
     /**
      * Auto-select the highest-priority available backend.
      *
@@ -61,11 +70,32 @@ public final class DefaultTurboQuantRuntime implements TurboQuantRuntime {
     }
 
     /**
+     * Auto-select the highest-priority available backend, initialised with
+     * model-level {@link SessionConfig}.
+     *
+     * @throws BackendException if no backend is available on the classpath
+     */
+    public static DefaultTurboQuantRuntime autoSelect(SessionConfig config) {
+        Backend backend = new BackendRegistry().createBest();
+        return new DefaultTurboQuantRuntime(backend, config);
+    }
+
+    /**
      * Use the named backend.
      *
      * @throws BackendException if the backend is not registered or not available
      */
     public static DefaultTurboQuantRuntime withBackend(String backendName, BackendConfig config) {
+        Backend backend = new BackendRegistry().createByName(backendName);
+        return new DefaultTurboQuantRuntime(backend, config);
+    }
+
+    /**
+     * Use the named backend, initialised with model-level {@link SessionConfig}.
+     *
+     * @throws BackendException if the backend is not registered or not available
+     */
+    public static DefaultTurboQuantRuntime withBackend(String backendName, SessionConfig config) {
         Backend backend = new BackendRegistry().createByName(backendName);
         return new DefaultTurboQuantRuntime(backend, config);
     }

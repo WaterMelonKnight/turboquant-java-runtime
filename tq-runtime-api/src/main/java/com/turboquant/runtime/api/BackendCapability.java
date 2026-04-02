@@ -14,5 +14,7 @@ public enum BackendCapability {
     /** Backend supports FP8 (E4M3 / E5M2) tensor cores. */
     FP8_TENSOR_CORE,
     /** Backend is a pure-CPU fallback (no GPU required). */
-    CPU_FALLBACK
+    CPU_FALLBACK,
+    /** Backend supports text-in / text-out inference (e.g. llama.cpp). */
+    TEXT_GENERATION
 }

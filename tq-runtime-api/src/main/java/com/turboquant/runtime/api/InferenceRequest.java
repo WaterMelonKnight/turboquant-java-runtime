@@ -16,14 +16,18 @@ import java.util.Objects;
  */
 public final class InferenceRequest {
 
-    private final int[] inputTokenIds;
-    private final int   maxNewTokens;
-    private final float temperature;
+    private final int[]  inputTokenIds;
+    private final int    maxNewTokens;
+    private final float  temperature;
+    private final float  topP;
+    private final String promptText;
 
     private InferenceRequest(Builder b) {
         this.inputTokenIds = Arrays.copyOf(b.inputTokenIds, b.inputTokenIds.length);
         this.maxNewTokens  = b.maxNewTokens;
         this.temperature   = b.temperature;
+        this.topP          = b.topP;
+        this.promptText    = b.promptText;
     }
 
     /** Token IDs of the prompt. Must be non-empty. */
@@ -44,6 +48,22 @@ public final class InferenceRequest {
         return temperature;
     }
 
+    /**
+     * Top-p (nucleus) sampling parameter (default 1.0 = disabled).
+     * Backends may ignore this in stub implementations.
+     */
+    public float topP() {
+        return topP;
+    }
+
+    /**
+     * Raw prompt text, used by text-native backends (e.g. llama.cpp).
+     * May be {@code null} when token IDs are supplied directly.
+     */
+    public String promptText() {
+        return promptText;
+    }
+
     /** Convenience: total tokens that will be processed (prompt + generated). */
     public int totalTokens() {
         return inputTokenIds.length + maxNewTokens;
@@ -53,7 +73,9 @@ public final class InferenceRequest {
     public String toString() {
         return "InferenceRequest{promptLen=" + inputTokenIds.length
                 + ", maxNewTokens=" + maxNewTokens
-                + ", temperature=" + temperature + '}';
+                + ", temperature=" + temperature
+                + ", topP=" + topP
+                + (promptText != null ? ", promptText=<set>" : "") + '}';
     }
 
     public static Builder builder() {
@@ -67,10 +89,21 @@ public final class InferenceRequest {
         return builder().inputTokenIds(ids).maxNewTokens(maxNewTokens).build();
     }
 
+    /** Convenience factory: text prompt for text-native backends (e.g. llama.cpp). */
+    public static InferenceRequest fromText(String prompt, int maxNewTokens) {
+        return builder()
+                .promptText(prompt)
+                .inputTokenIds(new int[]{1})   // placeholder token so validation passes
+                .maxNewTokens(maxNewTokens)
+                .build();
+    }
+
     public static final class Builder {
         private int[]  inputTokenIds = new int[0];
         private int    maxNewTokens  = 1;
         private float  temperature   = 1.0f;
+        private float  topP          = 1.0f;
+        private String promptText    = null;
 
         public Builder inputTokenIds(int... ids) {
             Objects.requireNonNull(ids, "inputTokenIds must not be null");
@@ -88,6 +121,17 @@ public final class InferenceRequest {
         public Builder temperature(float t) {
             if (t <= 0) throw new IllegalArgumentException("temperature must be > 0");
             this.temperature = t;
+            return this;
+        }
+
+        public Builder topP(float p) {
+            if (p <= 0 || p > 1) throw new IllegalArgumentException("topP must be in (0, 1]");
+            this.topP = p;
+            return this;
+        }
+
+        public Builder promptText(String text) {
+            this.promptText = text;
             return this;
         }
 

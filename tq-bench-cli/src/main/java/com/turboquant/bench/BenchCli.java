@@ -4,6 +4,7 @@ import com.turboquant.runtime.api.BackendConfig;
 import com.turboquant.runtime.api.InferenceRequest;
 import com.turboquant.runtime.api.InferenceResult;
 import com.turboquant.runtime.api.KvCacheStats;
+import com.turboquant.runtime.api.SessionConfig;
 import com.turboquant.runtime.api.TurboQuantRuntime;
 import com.turboquant.runtime.core.BackendRegistry;
 import com.turboquant.runtime.core.DefaultTurboQuantRuntime;
@@ -34,6 +35,12 @@ import java.util.concurrent.Callable;
  *   # force cpu-stub, 5 warmup + 20 timed iters, 256-token prompt, 64 generated
  *   java -jar tq-bench-cli-fat.jar --backend cpu-stub --warmup 5 --iters 20 \
  *        --prompt-len 256 --gen-len 64
+ *
+ *   # run llama.cpp with a real GGUF model
+ *   java -jar tq-bench-cli-fat.jar --backend llama.cpp \
+ *        --model-path /models/llama-3-8b-q4_k_m.gguf \
+ *        --prompt "The capital of France is" \
+ *        --max-new-tokens 64
  * </pre>
  */
 @Command(
@@ -79,6 +86,26 @@ public class BenchCli implements Callable<Integer> {
             defaultValue = "false")
     private boolean listBackends;
 
+    @Option(names = {"--model-path", "-m"},
+            description = "Path to a GGUF model file (required for llama.cpp backend).",
+            defaultValue = "")
+    private String modelPath;
+
+    @Option(names = {"--prompt"},
+            description = "Text prompt to use for llama.cpp inference.",
+            defaultValue = "Once upon a time")
+    private String prompt;
+
+    @Option(names = {"--context"},
+            description = "Context window size in tokens (llama.cpp). Default: 2048.",
+            defaultValue = "2048")
+    private int contextTokens;
+
+    @Option(names = {"--max-new-tokens"},
+            description = "Override max new tokens (overrides --gen-len for llama.cpp).",
+            defaultValue = "-1")
+    private int maxNewTokensOverride;
+
     // -------------------------------------------------------------------------
 
     public static void main(String[] args) {
@@ -93,6 +120,13 @@ public class BenchCli implements Callable<Integer> {
             return 0;
         }
 
+        boolean isLlamaCpp = "llama.cpp".equalsIgnoreCase(backendName)
+                || (!modelPath.isBlank() && "auto".equalsIgnoreCase(backendName));
+
+        if (isLlamaCpp) {
+            return runLlamaCpp();
+        }
+
         BackendConfig config = BackendConfig.builder()
                 .deviceIndex(deviceIndex)
                 .build();
@@ -100,6 +134,23 @@ public class BenchCli implements Callable<Integer> {
         try (TurboQuantRuntime runtime = buildRuntime(config)) {
             printHeader(runtime, config);
             runBench(runtime);
+        }
+        return 0;
+    }
+
+    private Integer runLlamaCpp() {
+        int effectiveMaxNew = maxNewTokensOverride > 0 ? maxNewTokensOverride : genLen;
+        SessionConfig sessionConfig = SessionConfig.builder()
+                .modelPath(modelPath.isBlank() ? null : modelPath)
+                .maxContextTokens(contextTokens)
+                .maxNewTokens(effectiveMaxNew)
+                .deviceId(deviceIndex)
+                .build();
+
+        String targetBackend = "auto".equalsIgnoreCase(backendName) ? "llama.cpp" : backendName;
+        try (TurboQuantRuntime runtime = DefaultTurboQuantRuntime.withBackend(targetBackend, sessionConfig)) {
+            printLlamaCppHeader(runtime, sessionConfig);
+            runLlamaCppBench(runtime, effectiveMaxNew);
         }
         return 0;
     }
@@ -113,6 +164,75 @@ public class BenchCli implements Callable<Integer> {
             return DefaultTurboQuantRuntime.autoSelect(config);
         }
         return DefaultTurboQuantRuntime.withBackend(backendName, config);
+    }
+
+    // -------------------------------------------------------------------------
+    // llama.cpp header + bench
+    // -------------------------------------------------------------------------
+
+    private void printLlamaCppHeader(TurboQuantRuntime runtime, SessionConfig cfg) {
+        System.out.println("=".repeat(62));
+        System.out.println("  TurboQuant Bench CLI  v0.1.0-SNAPSHOT  [llama.cpp mode]");
+        System.out.println("=".repeat(62));
+        System.out.printf("  Backend         : %s%n", runtime.backend().name());
+        System.out.printf("  Model path      : %s%n",
+                cfg.modelPath() != null ? cfg.modelPath() : "(not set)");
+        System.out.printf("  Context tokens  : %d%n", cfg.maxContextTokens());
+        System.out.printf("  Max new tokens  : %d%n", cfg.maxNewTokens());
+        System.out.printf("  Prompt          : %s%n", prompt);
+        System.out.printf("  Warmup iters    : %d%n", warmup);
+        System.out.printf("  Timed iters     : %d%n", iters);
+        System.out.println("=".repeat(62));
+    }
+
+    private void runLlamaCppBench(TurboQuantRuntime runtime, int maxNewTokens) {
+        InferenceRequest request = InferenceRequest.fromText(prompt, maxNewTokens);
+
+        if (warmup > 0) {
+            System.out.printf("Warming up (%d iteration%s)...%n", warmup, warmup == 1 ? "" : "s");
+            for (int i = 0; i < warmup; i++) {
+                runtime.infer(request);
+            }
+        }
+
+        System.out.printf("Running benchmark (%d iteration%s)...%n", iters, iters == 1 ? "" : "s");
+        double[] latenciesMs = new double[iters];
+        InferenceResult lastResult = null;
+
+        for (int i = 0; i < iters; i++) {
+            lastResult = runtime.infer(request);
+            latenciesMs[i] = lastResult.inferenceMillis();
+        }
+
+        printLlamaCppResults(latenciesMs, lastResult);
+    }
+
+    private void printLlamaCppResults(double[] latenciesMs, InferenceResult last) {
+        DoubleSummaryStatistics stats = java.util.Arrays.stream(latenciesMs).summaryStatistics();
+        double meanMs = stats.getAverage();
+        int genCount  = last != null ? last.generatedTokenCount() : 0;
+        double tokPerSec = genCount > 0 ? (genCount * 1000.0) / meanMs : 0.0;
+
+        System.out.println("-".repeat(62));
+        System.out.println("  Latency (ms) over " + iters + " iterations:");
+        System.out.printf("    mean  : %10.3f ms%n", meanMs);
+        System.out.printf("    min   : %10.3f ms%n", stats.getMin());
+        System.out.printf("    p50   : %10.3f ms%n", percentile(latenciesMs, 50));
+        System.out.printf("    p99   : %10.3f ms%n", percentile(latenciesMs, 99));
+        System.out.printf("    max   : %10.3f ms%n", stats.getMax());
+        System.out.printf("  Throughput    : %,10.1f tok/s (generated)%n", tokPerSec);
+
+        if (last != null) {
+            System.out.println("-".repeat(62));
+            System.out.printf("  Generated tokens : %d%n", last.generatedTokenCount());
+            System.out.printf("  Backend          : %s%n", last.backendName());
+            if (last.generatedText() != null) {
+                System.out.println("-".repeat(62));
+                System.out.println("  Last generated text:");
+                System.out.println("  " + last.generatedText().replace("\n", "\n  "));
+            }
+        }
+        System.out.println("=".repeat(62));
     }
 
     // -------------------------------------------------------------------------

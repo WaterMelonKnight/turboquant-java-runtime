@@ -1,0 +1,93 @@
+# ============================================================
+# Maven
+# ============================================================
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# Maven wrapper
+.mvn/wrapper/maven-wrapper.properties
+
+# ============================================================
+# CMake / native builds
+# ============================================================
+native/*/build/
+
+# Compiled native outputs that might land outside build/
+*.o
+*.so
+*.dylib
+*.dll
+*.a
+
+# ============================================================
+# Java
+# ============================================================
+*.class
+*.jar
+*.war
+*.ear
+
+# ============================================================
+# IDE — IntelliJ IDEA
+# ============================================================
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# IDE — Eclipse
+.classpath
+.project
+.settings/
+.factorypath
+bin/
+
+# IDE — VS Code
+.vscode/
+*.code-workspace
+
+# IDE — NetBeans
+nbproject/
+nbactions.xml
+
+# ============================================================
+# OS artefacts
+# ============================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ============================================================
+# Secrets / local config
+# ============================================================
+.env
+.env.*
+*.local
+local.properties
+application-local.yml
+application-local.yaml
+
+# ============================================================
+# Logs & temp files
+# ============================================================
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+
+# ============================================================
+# GGUF model files (large binary, never commit)
+# ============================================================
+*.gguf
+*.ggml
+*.bin
+models/

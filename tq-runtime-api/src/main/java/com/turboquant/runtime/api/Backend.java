@@ -32,6 +32,17 @@ public interface Backend extends AutoCloseable {
      */
     void init(BackendConfig config);
 
+    /**
+     * Initialise the backend with model-level session configuration.
+     *
+     * <p>Backends that support model loading (e.g. llama.cpp) should override
+     * this method.  The default implementation converts {@code config} to a
+     * {@link BackendConfig} and delegates to {@link #init(BackendConfig)}.</p>
+     */
+    default void init(SessionConfig config) {
+        init(config.toBackendConfig());
+    }
+
     /** Open a new compute session on this backend. */
     ComputeSession newSession();
 

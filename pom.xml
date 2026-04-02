@@ -20,6 +20,7 @@
     <module>tq-backend-cpu-stub</module>
     <module>tq-backend-cuda</module>
     <module>tq-backend-hip</module>
+    <module>tq-backend-llamacpp</module>
     <module>tq-bench-cli</module>
     <module>tq-spring-boot-starter</module>
   </modules>
@@ -35,6 +36,7 @@
     <junit.version>5.10.2</junit.version>
     <slf4j.version>2.0.13</slf4j.version>
     <picocli.version>4.7.6</picocli.version>
+    <llama.java.version>3.4.1</llama.java.version>
   </properties>
 
   <dependencyManagement>
@@ -69,6 +71,18 @@
         <groupId>com.turboquant</groupId>
         <artifactId>tq-backend-hip</artifactId>
         <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.turboquant</groupId>
+        <artifactId>tq-backend-llamacpp</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+
+      <!-- llama.cpp Java binding -->
+      <dependency>
+        <groupId>de.kherud</groupId>
+        <artifactId>llama</artifactId>
+        <version>${llama.java.version}</version>
       </dependency>
 
       <!-- Spring Boot BOM -->

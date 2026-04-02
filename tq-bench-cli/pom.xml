@@ -48,6 +48,12 @@
       <artifactId>tq-backend-hip</artifactId>
       <optional>true</optional>
     </dependency>
+    <!-- llama.cpp backend: bundled native binaries; optional so CPU-only builds still work -->
+    <dependency>
+      <groupId>com.turboquant</groupId>
+      <artifactId>tq-backend-llamacpp</artifactId>
+      <optional>true</optional>
+    </dependency>
 
     <dependency>
       <groupId>info.picocli</groupId>
