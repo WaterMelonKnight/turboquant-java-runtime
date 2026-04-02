@@ -11,6 +11,7 @@ import de.kherud.llama.ModelParameters;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.util.Set;
 
 /**
@@ -53,25 +54,46 @@ public final class LlamaCppBackend implements Backend {
     public void init(BackendConfig config) {
         throw new BackendException(
                 "LlamaCppBackend requires a SessionConfig with modelPath set. "
-                + "Use Backend#init(SessionConfig) instead.");
+                + "Use DefaultTurboQuantRuntime.withBackend(\"llama.cpp\", sessionConfig) "
+                + "where sessionConfig includes modelPath.");
     }
 
     @Override
     public void init(SessionConfig config) {
         if (config.modelPath() == null || config.modelPath().isBlank()) {
             throw new BackendException(
-                    "LlamaCppBackend: SessionConfig.modelPath() must not be null or blank.");
+                    "LlamaCppBackend: modelPath must not be null or blank. "
+                    + "Pass a path to a local GGUF file via SessionConfig.modelPath().");
         }
+
+        File modelFile = new File(config.modelPath());
+        if (!modelFile.exists()) {
+            throw new BackendException(
+                    "LlamaCppBackend: model file not found: " + config.modelPath());
+        }
+        if (!modelFile.isFile()) {
+            throw new BackendException(
+                    "LlamaCppBackend: model path is not a file: " + config.modelPath());
+        }
+
         this.sessionConfig = config;
 
+        int nGpuLayers = config.deviceId() > 0 ? 99 : 0;
         ModelParameters params = new ModelParameters()
                 .setModelFilePath(config.modelPath())
-                .setNGpuLayers(config.deviceId() > 0 ? 99 : 0)  // 99 = offload all layers to GPU
+                .setNGpuLayers(nGpuLayers)
                 .setNCtx(config.maxContextTokens());
 
         log.info("Loading llama.cpp model: {}", config.modelPath());
-        this.model = new LlamaModel(params);
-        log.info("llama.cpp model loaded (context={} tokens)", config.maxContextTokens());
+        log.info("  context={} tokens, GPU layers={}", config.maxContextTokens(), nGpuLayers);
+        try {
+            this.model = new LlamaModel(params);
+        } catch (Exception e) {
+            throw new BackendException(
+                    "LlamaCppBackend: failed to load model from " + config.modelPath()
+                    + " — " + e.getMessage(), e);
+        }
+        log.info("llama.cpp model loaded successfully");
     }
 
     @Override

@@ -2,6 +2,8 @@ package com.turboquant.backend.llamacpp;
 
 import com.turboquant.runtime.api.Backend;
 import com.turboquant.runtime.spi.BackendProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * {@link BackendProvider} for the llama.cpp backend.
@@ -24,8 +26,13 @@ public final class LlamaCppBackendProvider implements BackendProvider {
             // Trigger native loading by touching the LlamaModel class.
             Class.forName("de.kherud.llama.LlamaModel");
             ok = true;
-        } catch (ClassNotFoundException | UnsatisfiedLinkError | ExceptionInInitializerError ignored) {
-            // JAR not on classpath or native extraction failed; backend unavailable.
+        } catch (ClassNotFoundException e) {
+            LoggerFactory.getLogger(LlamaCppBackendProvider.class)
+                    .debug("llama.cpp backend unavailable: de.kherud:llama not on classpath");
+        } catch (UnsatisfiedLinkError | ExceptionInInitializerError e) {
+            LoggerFactory.getLogger(LlamaCppBackendProvider.class)
+                    .debug("llama.cpp backend unavailable: native binding failed to load — {}",
+                            e.getMessage());
         }
         NATIVE_AVAILABLE = ok;
     }

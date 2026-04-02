@@ -6,12 +6,23 @@ import java.util.Objects;
 /**
  * Immutable request object for a single forward-pass through the model.
  *
- * <p>Build via {@link #builder()}:</p>
+ * <p>Two request modes are supported:</p>
+ * <ul>
+ *   <li><b>Token-based:</b> provide {@code inputTokenIds} — used by backends that consume
+ *       pre-tokenised input (cpu-stub, cuda, hip).</li>
+ *   <li><b>Text-based:</b> provide {@code promptText} — used by text-native backends such
+ *       as llama.cpp that handle tokenisation internally.</li>
+ * </ul>
+ *
+ * <p>At least one of {@code promptText} or {@code inputTokenIds} must be set.
+ * Neither is required to be present when the other is supplied.</p>
+ *
  * <pre>{@code
- * InferenceRequest req = InferenceRequest.builder()
- *     .inputTokenIds(new int[]{1, 2, 3})
- *     .maxNewTokens(32)
- *     .build();
+ * // Token-based (cpu-stub, cuda, hip)
+ * InferenceRequest req = InferenceRequest.syntheticPrompt(128, 32);
+ *
+ * // Text-based (llama.cpp)
+ * InferenceRequest req = InferenceRequest.fromText("Once upon a time", 64);
  * }</pre>
  */
 public final class InferenceRequest {
@@ -30,7 +41,10 @@ public final class InferenceRequest {
         this.promptText    = b.promptText;
     }
 
-    /** Token IDs of the prompt. Must be non-empty. */
+    /**
+     * Token IDs of the prompt.
+     * Returns an empty array for text-mode requests (those built via {@link #fromText}).
+     */
     public int[] inputTokenIds() {
         return Arrays.copyOf(inputTokenIds, inputTokenIds.length);
     }
@@ -71,11 +85,15 @@ public final class InferenceRequest {
 
     @Override
     public String toString() {
-        return "InferenceRequest{promptLen=" + inputTokenIds.length
+        if (promptText != null && !promptText.isBlank()) {
+            return "InferenceRequest{mode=text, maxNewTokens=" + maxNewTokens
+                    + ", temperature=" + temperature
+                    + ", topP=" + topP + '}';
+        }
+        return "InferenceRequest{mode=tokens, promptLen=" + inputTokenIds.length
                 + ", maxNewTokens=" + maxNewTokens
                 + ", temperature=" + temperature
-                + ", topP=" + topP
-                + (promptText != null ? ", promptText=<set>" : "") + '}';
+                + ", topP=" + topP + '}';
     }
 
     public static Builder builder() {
@@ -91,9 +109,12 @@ public final class InferenceRequest {
 
     /** Convenience factory: text prompt for text-native backends (e.g. llama.cpp). */
     public static InferenceRequest fromText(String prompt, int maxNewTokens) {
+        Objects.requireNonNull(prompt, "prompt must not be null");
+        if (prompt.isBlank()) {
+            throw new IllegalArgumentException("prompt must not be blank");
+        }
         return builder()
                 .promptText(prompt)
-                .inputTokenIds(new int[]{1})   // placeholder token so validation passes
                 .maxNewTokens(maxNewTokens)
                 .build();
     }
@@ -107,7 +128,6 @@ public final class InferenceRequest {
 
         public Builder inputTokenIds(int... ids) {
             Objects.requireNonNull(ids, "inputTokenIds must not be null");
-            if (ids.length == 0) throw new IllegalArgumentException("inputTokenIds must be non-empty");
             this.inputTokenIds = ids;
             return this;
         }
@@ -136,8 +156,11 @@ public final class InferenceRequest {
         }
 
         public InferenceRequest build() {
-            if (inputTokenIds.length == 0) {
-                throw new IllegalStateException("inputTokenIds must be set before building");
+            boolean hasText   = promptText != null && !promptText.isBlank();
+            boolean hasTokens = inputTokenIds.length > 0;
+            if (!hasText && !hasTokens) {
+                throw new IllegalStateException(
+                        "InferenceRequest requires either promptText or at least one inputTokenId");
             }
             return new InferenceRequest(this);
         }

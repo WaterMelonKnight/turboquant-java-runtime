@@ -185,6 +185,7 @@ turboquant-java-runtime/
 └── docs/
     ├── architecture.md
     ├── rocm-porting-plan.md
+    ├── llamacpp-demo.md
     └── llamacpp-smoke-test.md
 ```
 
@@ -325,6 +326,8 @@ java -jar tq-bench-cli/target/tq-bench-cli-*-fat.jar \
 ```
 
 The `de.kherud:llama` JAR bundles native llama.cpp binaries for Linux, macOS, and Windows. No separate installation is required. Current validated mode is **CPU-only**; GPU offload via llama.cpp is not yet wired up in this project.
+
+See [docs/llamacpp-demo.md](docs/llamacpp-demo.md) for the full demo guide, including model download instructions, CLI options, and the optional smoke test.
 
 See [docs/llamacpp-smoke-test.md](docs/llamacpp-smoke-test.md) for model preparation notes and optional smoke test instructions.
 

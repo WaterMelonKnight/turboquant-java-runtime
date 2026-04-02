@@ -18,11 +18,18 @@ import java.util.List;
 import java.util.concurrent.Callable;
 
 /**
- * TurboQuant Bench CLI — v0.1
+ * TurboQuant Bench CLI — v0.2
  *
- * <p>Runs a stub inference loop against the selected backend and prints:
+ * <p>Runs an inference loop against the selected backend and prints:
  * backend name, version, capabilities, config, per-iteration latency stats,
  * and the final KV cache snapshot.</p>
+ *
+ * <p>Three backend modes are supported:</p>
+ * <ul>
+ *   <li><b>cpu-stub</b> — pure Java, deterministic LCG, no real model</li>
+ *   <li><b>llama.cpp</b> — real GGUF model, real text generation (CPU-only validated)</li>
+ *   <li><b>cuda / hip</b> — placeholder structures only, no real GPU kernels</li>
+ * </ul>
  *
  * <h2>Usage examples</h2>
  * <pre>
@@ -32,13 +39,13 @@ import java.util.concurrent.Callable;
  *   # list all discovered backends and exit
  *   java -jar tq-bench-cli-fat.jar --list
  *
- *   # force cpu-stub, 5 warmup + 20 timed iters, 256-token prompt, 64 generated
+ *   # cpu-stub: 5 warmup + 20 timed iters, 256-token prompt, 64 generated
  *   java -jar tq-bench-cli-fat.jar --backend cpu-stub --warmup 5 --iters 20 \
  *        --prompt-len 256 --gen-len 64
  *
- *   # run llama.cpp with a real GGUF model
+ *   # llama.cpp: real inference with a local GGUF model
  *   java -jar tq-bench-cli-fat.jar --backend llama.cpp \
- *        --model-path /models/llama-3-8b-q4_k_m.gguf \
+ *        --model-path /models/qwen2.5-0.5b-instruct-q4_0.gguf \
  *        --prompt "The capital of France is" \
  *        --max-new-tokens 64
  * </pre>
@@ -52,7 +59,7 @@ import java.util.concurrent.Callable;
 public class BenchCli implements Callable<Integer> {
 
     @Option(names = {"--backend", "-b"},
-            description = "Backend to use (e.g. cpu-stub, cuda, hip). Default: auto-select.",
+            description = "Backend name: cpu-stub, llama.cpp, cuda, hip. Default: auto-select.",
             defaultValue = "auto")
     private String backendName;
 
@@ -232,6 +239,14 @@ public class BenchCli implements Callable<Integer> {
                 System.out.println("  " + last.generatedText().replace("\n", "\n  "));
             }
         }
+
+        System.out.println("=".repeat(62));
+        System.out.println("  DEMO SUMMARY");
+        System.out.println("=".repeat(62));
+        System.out.printf("  backend    : llama.cpp (experimental, CPU-only validated)%n");
+        System.out.printf("  throughput : %.1f tok/s (measured, %d token run)%n",
+                tokPerSec, genCount);
+        System.out.printf("  note       : CUDA/HIP are separate future backend tracks%n");
         System.out.println("=".repeat(62));
     }
 
@@ -255,8 +270,9 @@ public class BenchCli implements Callable<Integer> {
     // -------------------------------------------------------------------------
 
     private void printHeader(TurboQuantRuntime runtime, BackendConfig config) {
+        String mode = modeLabel(runtime.backend().name());
         System.out.println("=".repeat(62));
-        System.out.println("  TurboQuant Bench CLI  v0.1.0-SNAPSHOT");
+        System.out.printf("  TurboQuant Bench CLI  v0.1.0-SNAPSHOT  %s%n", mode);
         System.out.println("=".repeat(62));
         System.out.printf("  Backend name    : %s%n", runtime.backend().name());
         System.out.printf("  Backend version : %s%n", runtime.backend().version());
@@ -321,7 +337,7 @@ public class BenchCli implements Callable<Integer> {
         System.out.printf("    p50   : %10.3f ms%n", p50Ms);
         System.out.printf("    p99   : %10.3f ms%n", p99Ms);
         System.out.printf("    max   : %10.3f ms%n", maxMs);
-        System.out.printf("  Throughput    : %,10.1f tok/s (generated)%n", tokPerSec);
+        System.out.printf("  Throughput    : %,10.1f tok/s (generated, stub)%n", tokPerSec);
 
         if (lastResult != null) {
             System.out.println("-".repeat(62));
@@ -343,8 +359,27 @@ public class BenchCli implements Callable<Integer> {
         System.out.printf("    simulated hitRate: %.1f%%%n", cache.hitRate() * 100.0);
 
         System.out.println("=".repeat(62));
-        System.out.println("  NOTE: stub backend — no real quantisation kernels executed.");
+        System.out.printf("  NOTE: %s%n", backendNote(lastResult != null ? lastResult.backendName() : backendName));
         System.out.println("=".repeat(62));
+    }
+
+    private static String backendNote(String name) {
+        return switch (name) {
+            case "cpu-stub" -> "cpu-stub — no real model; deterministic LCG only";
+            case "cuda"     -> "cuda placeholder — no real GPU kernels yet";
+            case "hip"      -> "hip placeholder — no real GPU kernels yet";
+            default         -> name + " — stub backend";
+        };
+    }
+
+    private static String modeLabel(String backendName) {
+        return switch (backendName) {
+            case "cpu-stub" -> "[cpu-stub mode]";
+            case "cuda"     -> "[cuda placeholder]";
+            case "hip"      -> "[hip placeholder]";
+            case "llama.cpp" -> "[llama.cpp mode]";
+            default          -> "[" + backendName + " mode]";
+        };
     }
 
     // -------------------------------------------------------------------------

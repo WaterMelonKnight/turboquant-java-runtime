@@ -28,15 +28,19 @@ The project is pre-alpha — phases may be reordered or reprioritised.
 
 ## v0.2 — Real inference path (in progress)
 
-**Goal:** Provide a working end-to-end inference path against a real language model. The first milestone — loading a local GGUF model and generating text via llama.cpp — is complete.
+**Goal:** Provide a working end-to-end inference path against a real language model. The llama.cpp path is the primary experimental real-inference track.
 
 - [x] `tq-backend-llamacpp` module using `de.kherud:llama` Java binding
 - [x] `SessionConfig` with `modelPath`, `maxContextTokens`, `maxNewTokens`, `temperature`, `topP`
-- [x] `InferenceRequest.fromText(prompt, maxNewTokens)` for text-native backends
+- [x] `InferenceRequest.fromText(prompt, maxNewTokens)` — text-based requests need no placeholder token IDs
+- [x] Two-mode `InferenceRequest` design: token-based (cpu-stub, cuda, hip) and text-based (llama.cpp)
 - [x] `InferenceResult.generatedText()` for raw text output
 - [x] Bench CLI `--model-path`, `--prompt`, `--context`, `--max-new-tokens` options
-- [x] Smoke run validated: Qwen2.5-0.5B-Instruct Q4_0, CPU-only, ~9 tok/s
+- [x] Bench CLI mode labels and summary block for each backend type
+- [x] `LlamaCppBackend` file-existence check and clear error messages for common failures
 - [x] Optional `LlamaCppSmokeTest` (skipped unless `-Dtq.test.llamacpp.model=...` is set)
+- [x] Smoke run validated: Qwen2.5-0.5B-Instruct Q4_0, CPU-only, ~9 tok/s
+- [x] `docs/llamacpp-demo.md` — full demo guide for the llama.cpp path
 - [ ] GPU offload via llama.cpp `nGpuLayers` (requires a system with a supported GPU)
 - [ ] Proper KV cache metrics surfaced from llama.cpp internals
 - [ ] Tokenizer integration for prompt token count reporting
