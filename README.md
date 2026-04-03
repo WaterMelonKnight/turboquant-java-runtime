@@ -20,6 +20,7 @@ A backend-agnostic Java 17 runtime foundation for future TurboQuant-oriented inf
 - [Project layout](#project-layout)
 - [Quick start](#quick-start)
 - [Experimental real inference path (llama.cpp)](#experimental-real-inference-path-llamacpp)
+- [Benchmark snapshots](#benchmark-snapshots)
 - [Native ABI](#native-abi)
 - [Roadmap](#roadmap)
 - [Notes on TurboQuant](#notes-on-turboquant)
@@ -377,6 +378,56 @@ Backend     : llama.cpp
 - CUDA and HIP backends in this repository are unrelated to this path — they remain placeholder structures.
 
 ---
+
+## Benchmark snapshots
+
+> **Experimental / CPU-only / illustrative.** These numbers come from a single
+> development machine running llama.cpp in CPU-only mode. They are included to
+> confirm that the end-to-end inference path works and that the benchmark
+> tooling produces consistent output. They are **not** reproducible performance
+> claims and should not be compared across hardware.
+
+Three runs on Qwen2.5-0.5B-Instruct (Q4\_0, context 2048), CPU-only:
+
+| Run | gen tokens | tok/s (mean) | latency mean | wall clock |
+|-----|-----------|-------------|-------------|-----------|
+| `gen32` | 32 | 3.428 | 9 960 ms | 61 719 ms |
+| `gen64` | 64 | 3.888 | 17 120 ms | 100 868 ms |
+| `gen64` (repeat) | 64 | 1.894 | 34 440 ms | 210 514 ms |
+
+Charts (CPU-only, illustrative):
+
+![Throughput](docs/benchmarks/throughput.png)
+![Latency](docs/benchmarks/latency.png)
+![Wall clock](docs/benchmarks/wall_clock.png)
+
+Full table with all columns: [docs/benchmarks/summary.md](docs/benchmarks/summary.md)
+
+### Regenerating charts
+
+```bash
+# Requires Python 3 + matplotlib
+pip install matplotlib
+
+# From the project root
+python scripts/plot_benchmarks.py
+
+# Custom CSV or output directory
+python scripts/plot_benchmarks.py \
+  --csv benchmarks/results/llamacpp_baselines.csv \
+  --out-dir docs/benchmarks
+```
+
+The script reads any CSV produced by `tq-bench-cli --output-csv` and writes
+`throughput.png`, `latency.png`, `wall_clock.png`, and `summary.md` to the
+output directory.
+
+See [docs/benchmarking.md](docs/benchmarking.md) for metric definitions, the
+export format, and instructions for adding your own runs.
+
+---
+
+## Native ABI
 
 The file `include/tq_native_api.h` is the portability contract between the
 Java JNI bridges and the native backend implementations.

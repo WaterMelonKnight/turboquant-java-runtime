@@ -1,0 +1,45 @@
+{
+  "benchmarkVersion": "0.2",
+  "runId": "3cd480e7",
+  "timestampUtc": "2026-04-03T01:40:57.021671846Z",
+  "gitCommit": "64dd51e",
+  "backend": {
+    "name": "llama.cpp",
+    "mode": "LLAMA_CPP_REAL",
+    "isRealInference": true,
+    "gpuOffloadActive": false
+  },
+  "model": {
+    "path": "/workspace/models/qwen2.5-0.5b-instruct-q4_0.gguf",
+    "basename": "qwen2.5-0.5b-instruct-q4_0.gguf",
+    "quantHint": "Q4_0"
+  },
+  "prompt": {
+    "text": "Once upon a time",
+    "length": 0,
+    "promptTokenCount": null
+  },
+  "config": {
+    "requestedMaxNewTokens": 64,
+    "contextTokens": 2048,
+    "warmupIterations": 1,
+    "timedIterations": 5
+  },
+  "metrics": {
+    "generatedTokensLastRun": 65,
+    "totalLatencyMs": {
+      "mean": 34440.766,
+      "min": 32400.420,
+      "p50": 33899.591,
+      "p99": 38399.704,
+      "max": 38399.704
+    },
+    "generatedTokensPerSecondMean": 1.894,
+    "promptTokensPerSecond": null,
+    "modelLoadTimeMs": null,
+    "wallClockMs": 210514.511
+  },
+  "environmentNotes": [
+    "CPU-only (device index = 0)"
+  ]
+}
