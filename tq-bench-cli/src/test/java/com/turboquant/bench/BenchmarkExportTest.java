@@ -290,4 +290,107 @@ class BenchmarkExportTest {
         assertEquals(BenchmarkRunResult.BackendMode.CPU_STUB,
                 BenchmarkRunResult.modeFor("unknown-backend"));
     }
+
+    // -------------------------------------------------------------------------
+    // GPU offload fields
+    // -------------------------------------------------------------------------
+
+    @Test
+    void gpuOffloadNotRequestedByDefault() {
+        BenchmarkRunResult r = sampleResult();
+        assertFalse(r.gpuOffloadRequested(), "gpuOffloadRequested must be false when not set");
+        assertNull(r.gpuLayersRequested(),   "gpuLayersRequested must be null when not set");
+        assertFalse(r.gpuOffloadActive(),    "gpuOffloadActive must be false for cpu-stub");
+    }
+
+    @Test
+    void gpuOffloadRequestedFieldsRoundTrip() {
+        BenchmarkRunResult r = BenchmarkRunResult.builder()
+                .backendName("llama.cpp")
+                .backendMode(BenchmarkRunResult.BackendMode.LLAMA_CPP_REAL)
+                .isRealInference(true)
+                .gpuOffloadRequested(true)
+                .gpuLayersRequested(32)
+                .gpuOffloadActive(null)   // unknown — build may not support it
+                .metrics(sampleMetrics())
+                .build();
+
+        assertTrue(r.gpuOffloadRequested());
+        assertEquals(32, r.gpuLayersRequested());
+        assertNull(r.gpuOffloadActive(), "unknown offload status must be null");
+    }
+
+    @Test
+    void gpuOffloadActiveCanBeFalseWhenCpuOnlyBuildDetected() {
+        BenchmarkRunResult r = BenchmarkRunResult.builder()
+                .backendName("llama.cpp")
+                .backendMode(BenchmarkRunResult.BackendMode.LLAMA_CPP_REAL)
+                .isRealInference(true)
+                .gpuOffloadRequested(true)
+                .gpuLayersRequested(99)
+                .gpuOffloadActive(false)  // CPU-only build detected
+                .metrics(sampleMetrics())
+                .addEnvironmentNote("GPU offload requested but CPU-only build detected")
+                .build();
+
+        assertTrue(r.gpuOffloadRequested());
+        assertEquals(Boolean.FALSE, r.gpuOffloadActive());
+    }
+
+    @Test
+    void toJsonContainsGpuOffloadFields() {
+        BenchmarkRunResult r = BenchmarkRunResult.builder()
+                .backendName("llama.cpp")
+                .backendMode(BenchmarkRunResult.BackendMode.LLAMA_CPP_REAL)
+                .isRealInference(true)
+                .gpuOffloadRequested(true)
+                .gpuLayersRequested(32)
+                .gpuOffloadActive(null)
+                .metrics(sampleMetrics())
+                .build();
+
+        String json = BenchmarkExporter.toJson(r);
+        assertTrue(json.contains("\"gpuOffloadRequested\""), "JSON must contain gpuOffloadRequested");
+        assertTrue(json.contains("\"gpuLayersRequested\""),  "JSON must contain gpuLayersRequested");
+        assertTrue(json.contains("\"gpuOffloadActive\""),    "JSON must contain gpuOffloadActive");
+        assertTrue(json.contains("true"),  "gpuOffloadRequested must be true");
+        assertTrue(json.contains("32"),    "gpuLayersRequested must be 32");
+    }
+
+    @Test
+    void toJsonRendersUnknownGpuOffloadActiveAsNull() {
+        BenchmarkRunResult r = BenchmarkRunResult.builder()
+                .backendName("llama.cpp")
+                .backendMode(BenchmarkRunResult.BackendMode.LLAMA_CPP_REAL)
+                .isRealInference(true)
+                .gpuOffloadRequested(true)
+                .gpuLayersRequested(32)
+                .gpuOffloadActive(null)
+                .metrics(sampleMetrics())
+                .build();
+
+        String json = BenchmarkExporter.toJson(r);
+        assertTrue(json.contains("\"gpuOffloadActive\": null") || json.contains("\"gpuOffloadActive\":null"),
+                "unknown gpuOffloadActive must render as JSON null");
+    }
+
+    @Test
+    void csvRowColumnCountMatchesHeaderWithGpuFields() {
+        // Build a result with GPU fields set
+        BenchmarkRunResult r = BenchmarkRunResult.builder()
+                .backendName("llama.cpp")
+                .backendMode(BenchmarkRunResult.BackendMode.LLAMA_CPP_REAL)
+                .isRealInference(true)
+                .gpuOffloadRequested(true)
+                .gpuLayersRequested(32)
+                .gpuOffloadActive(null)
+                .requestedMaxNewTokens(32)
+                .metrics(sampleMetrics())
+                .build();
+
+        String header = BenchmarkExporter.CSV_HEADER;
+        String row    = BenchmarkExporter.toCsvRow(r);
+        assertEquals(header.split(",", -1).length, row.split(",", -1).length,
+                "CSV row column count must match header after adding GPU fields");
+    }
 }

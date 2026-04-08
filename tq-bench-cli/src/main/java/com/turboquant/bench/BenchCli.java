@@ -129,6 +129,15 @@ public class BenchCli implements Callable<Integer> {
             defaultValue = "")
     private String outputCsv;
 
+    @Option(names = {"--gpu-layers"},
+            description = "Number of model layers to offload to GPU via llama.cpp nGpuLayers. "
+                    + "0 = CPU-only (default). Positive = that many layers on GPU. "
+                    + "-1 = all layers. "
+                    + "Only meaningful for --backend llama.cpp. "
+                    + "Whether offload actually activates depends on the native llama.cpp build.",
+            defaultValue = "0")
+    private int gpuLayers;
+
     // -------------------------------------------------------------------------
 
     public static void main(String[] args) {
@@ -172,6 +181,7 @@ public class BenchCli implements Callable<Integer> {
                 .maxContextTokens(contextTokens)
                 .maxNewTokens(effectiveMaxNew)
                 .deviceId(deviceIndex)
+                .nGpuLayers(gpuLayers)
                 .build();
 
         String targetBackend = "auto".equalsIgnoreCase(backendName) ? "llama.cpp" : backendName;
@@ -284,27 +294,28 @@ public class BenchCli implements Callable<Integer> {
 
         String basename  = BenchmarkRunResult.basename(modelPath.isBlank() ? null : modelPath);
         String quantHint = BenchmarkRunResult.quantHintFrom(basename);
+        boolean gpuRequested = gpuLayers != 0;
 
         return BenchmarkRunResult.builder()
                 .gitCommit(detectGitCommit())
                 .backendName("llama.cpp")
                 .backendMode(BenchmarkRunResult.BackendMode.LLAMA_CPP_REAL)
                 .isRealInference(true)
-                .gpuOffloadActive(deviceIndex > 0 ? null : false)
+                .gpuOffloadRequested(gpuRequested)
+                .gpuLayersRequested(gpuRequested ? gpuLayers : null)
+                .gpuOffloadActive(gpuRequested ? null : false)
                 .modelPath(modelPath.isBlank() ? null : modelPath)
                 .modelBasename(basename)
                 .quantHint(quantHint)
                 .promptText(prompt)
-                .promptLength(0)        // char count not surfaced; token count unknown
-                .promptTokenCount(null) // not available from de.kherud:llama
+                .promptLength(0)
+                .promptTokenCount(null)
                 .requestedMaxNewTokens(maxNewTokens)
                 .contextTokens(contextTokens)
                 .warmupIterations(warmup)
                 .timedIterations(iters)
                 .metrics(metrics)
-                .addEnvironmentNote(deviceIndex > 0
-                        ? "GPU offload requested (device " + deviceIndex + "); not validated"
-                        : "CPU-only (device index = 0)")
+                .addEnvironmentNote(gpuOffloadNote(gpuLayers))
                 .build();
     }
 
@@ -364,6 +375,7 @@ public class BenchCli implements Callable<Integer> {
         System.out.printf("  Context tokens  : %d%n", cfg.maxContextTokens());
         System.out.printf("  Max new tokens  : %d%n", cfg.maxNewTokens());
         System.out.printf("  Prompt          : %s%n", prompt);
+        System.out.printf("  GPU layers      : %s%n", gpuLayersLabel(cfg.nGpuLayers()));
         System.out.printf("  Warmup iters    : %d%n", warmup);
         System.out.printf("  Timed iters     : %d%n", iters);
         System.out.println("=".repeat(62));
@@ -399,10 +411,11 @@ public class BenchCli implements Callable<Integer> {
         System.out.println("=".repeat(62));
         System.out.println("  DEMO SUMMARY");
         System.out.println("=".repeat(62));
-        System.out.printf("  backend    : llama.cpp (experimental, CPU-only validated)%n");
-        System.out.printf("  throughput : %s tok/s (measured, %d token run)%n",
+        System.out.printf("  backend        : llama.cpp (experimental)%n");
+        System.out.printf("  gpu offload    : %s%n", gpuLayersLabel(gpuLayers));
+        System.out.printf("  throughput     : %s tok/s (measured, %d token run)%n",
                 tokPerSec != null ? String.format("%.1f", tokPerSec) : "n/a", genCount);
-        System.out.printf("  note       : CUDA/HIP are separate future backend tracks%n");
+        System.out.printf("  note           : CUDA/HIP are separate future backend tracks%n");
         System.out.println("=".repeat(62));
     }
 
@@ -506,5 +519,17 @@ public class BenchCli implements Callable<Integer> {
             case "llama.cpp" -> "[llama.cpp mode]";
             default          -> "[" + backendName + " mode]";
         };
+    }
+
+    private static String gpuLayersLabel(int nGpuLayers) {
+        if (nGpuLayers == 0)  return "not requested (CPU-only)";
+        if (nGpuLayers < 0)   return "all layers requested (nGpuLayers=-1)";
+        return nGpuLayers + " layer(s) requested";
+    }
+
+    private static String gpuOffloadNote(int nGpuLayers) {
+        if (nGpuLayers == 0) return "CPU-only (nGpuLayers=0)";
+        if (nGpuLayers < 0)  return "GPU offload requested: all layers — actual activation depends on native build";
+        return "GPU offload requested: " + nGpuLayers + " layer(s) — actual activation depends on native build";
     }
 }

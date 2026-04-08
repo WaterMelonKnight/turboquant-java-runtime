@@ -36,7 +36,9 @@ public final class BenchmarkRunResult {
     private final String      backendName;
     private final BackendMode backendMode;
     private final boolean     isRealInference;
-    private final Boolean     gpuOffloadActive; // null = unknown
+    private final boolean     gpuOffloadRequested; // true when nGpuLayers != 0 was requested
+    private final Integer     gpuLayersRequested;  // null for non-llama.cpp backends
+    private final Boolean     gpuOffloadActive;    // null = unknown, false = CPU-only, true = confirmed active
 
     // --- model (null for token-based backends) ---
     private final String modelPath;
@@ -67,6 +69,8 @@ public final class BenchmarkRunResult {
         this.backendName           = b.backendName;
         this.backendMode           = b.backendMode;
         this.isRealInference       = b.isRealInference;
+        this.gpuOffloadRequested   = b.gpuOffloadRequested;
+        this.gpuLayersRequested    = b.gpuLayersRequested;
         this.gpuOffloadActive      = b.gpuOffloadActive;
         this.modelPath             = b.modelPath;
         this.modelBasename         = b.modelBasename;
@@ -92,6 +96,8 @@ public final class BenchmarkRunResult {
     public String backendName()           { return backendName; }
     public BackendMode backendMode()      { return backendMode; }
     public boolean isRealInference()      { return isRealInference; }
+    public boolean gpuOffloadRequested()  { return gpuOffloadRequested; }
+    public Integer gpuLayersRequested()   { return gpuLayersRequested; }
     public Boolean gpuOffloadActive()     { return gpuOffloadActive; }
     public String modelPath()             { return modelPath; }
     public String modelBasename()         { return modelBasename; }
@@ -172,12 +178,14 @@ public final class BenchmarkRunResult {
     // -------------------------------------------------------------------------
 
     public static final class Builder {
-        private String  runId            = UUID.randomUUID().toString().substring(0, 8);
-        private Instant timestampUtc     = Instant.now();
+        private String  runId              = UUID.randomUUID().toString().substring(0, 8);
+        private Instant timestampUtc       = Instant.now();
         private String  gitCommit;
-        private String  backendName      = "unknown";
-        private BackendMode backendMode  = BackendMode.CPU_STUB;
-        private boolean isRealInference  = false;
+        private String  backendName        = "unknown";
+        private BackendMode backendMode    = BackendMode.CPU_STUB;
+        private boolean isRealInference    = false;
+        private boolean gpuOffloadRequested = false;
+        private Integer gpuLayersRequested;
         private Boolean gpuOffloadActive;
         private String  modelPath;
         private String  modelBasename;
@@ -198,6 +206,8 @@ public final class BenchmarkRunResult {
         public Builder backendName(String v)            { this.backendName = v; return this; }
         public Builder backendMode(BackendMode v)       { this.backendMode = v; return this; }
         public Builder isRealInference(boolean v)       { this.isRealInference = v; return this; }
+        public Builder gpuOffloadRequested(boolean v)   { this.gpuOffloadRequested = v; return this; }
+        public Builder gpuLayersRequested(Integer v)    { this.gpuLayersRequested = v; return this; }
         public Builder gpuOffloadActive(Boolean v)      { this.gpuOffloadActive = v; return this; }
         public Builder modelPath(String v)              { this.modelPath = v; return this; }
         public Builder modelBasename(String v)          { this.modelBasename = v; return this; }

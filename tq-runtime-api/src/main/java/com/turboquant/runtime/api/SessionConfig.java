@@ -27,6 +27,7 @@ public final class SessionConfig {
     private final float  temperature;
     private final float  topP;
     private final int    deviceId;
+    private final int    nGpuLayers;
     private final Map<String, String> extras;
 
     private SessionConfig(Builder b) {
@@ -36,6 +37,7 @@ public final class SessionConfig {
         this.temperature      = b.temperature;
         this.topP             = b.topP;
         this.deviceId         = b.deviceId;
+        this.nGpuLayers       = b.nGpuLayers;
         this.extras           = Map.copyOf(b.extras);
     }
 
@@ -67,6 +69,25 @@ public final class SessionConfig {
     /** Zero-based device index (GPU ordinal or ignored by CPU backends). */
     public int deviceId() {
         return deviceId;
+    }
+
+    /**
+     * Number of model layers to offload to GPU via llama.cpp's {@code nGpuLayers} parameter.
+     *
+     * <p>0 (default) means CPU-only — no layers are offloaded.
+     * A positive value requests that many layers be placed on the GPU.
+     * The special value {@code -1} requests offloading all layers (equivalent to passing
+     * a very large number to llama.cpp, e.g. 999).</p>
+     *
+     * <p>Whether offload actually occurs depends on the native llama.cpp build:
+     * a CPU-only build silently ignores this setting and runs all layers on CPU.
+     * The backend logs a warning when GPU offload is requested but appears unavailable.</p>
+     *
+     * <p>This field is only meaningful for the {@code llama.cpp} backend.
+     * It is ignored by cpu-stub, cuda, and hip backends.</p>
+     */
+    public int nGpuLayers() {
+        return nGpuLayers;
     }
 
     /** Provider-specific key/value pairs forwarded verbatim to the backend. */
@@ -101,7 +122,8 @@ public final class SessionConfig {
                 + ", maxNewTokens=" + maxNewTokens
                 + ", temperature=" + temperature
                 + ", topP=" + topP
-                + ", deviceId=" + deviceId + '}';
+                + ", deviceId=" + deviceId
+                + ", nGpuLayers=" + nGpuLayers + '}';
     }
 
     public static final class Builder {
@@ -111,6 +133,7 @@ public final class SessionConfig {
         private float  temperature      = 1.0f;
         private float  topP             = 1.0f;
         private int    deviceId         = 0;
+        private int    nGpuLayers       = 0;
         private final java.util.HashMap<String, String> extras = new java.util.HashMap<>();
 
         public Builder modelPath(String path) {
@@ -144,6 +167,17 @@ public final class SessionConfig {
 
         public Builder deviceId(int id) {
             this.deviceId = id;
+            return this;
+        }
+
+        /**
+         * Number of model layers to offload to GPU via llama.cpp.
+         * 0 = CPU-only (default). Positive = that many layers on GPU.
+         * -1 = offload all layers (passed as 999 to llama.cpp).
+         * Ignored by backends other than llama.cpp.
+         */
+        public Builder nGpuLayers(int n) {
+            this.nGpuLayers = n;
             return this;
         }
 

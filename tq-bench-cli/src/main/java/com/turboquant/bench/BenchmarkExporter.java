@@ -25,10 +25,10 @@ import java.util.List;
  */
 public final class BenchmarkExporter {
 
-    // CSV column names — 23 columns
+    // CSV column names — 26 columns (added gpu_offload_requested, gpu_layers_requested after gpu_offload_active)
     public static final String CSV_HEADER =
             "run_id,timestamp_utc,git_commit,backend_name,backend_mode," +
-            "is_real_inference,gpu_offload_active,model_basename,quant_hint," +
+            "is_real_inference,gpu_offload_requested,gpu_layers_requested,gpu_offload_active,model_basename,quant_hint," +
             "prompt_length,prompt_token_count,requested_max_new_tokens,context_tokens," +
             "warmup_iters,timed_iters,generated_tokens_last_run," +
             "latency_mean_ms,latency_min_ms,latency_p50_ms,latency_p99_ms,latency_max_ms," +
@@ -69,6 +69,8 @@ public final class BenchmarkExporter {
         sb.append("    \"name\": ").append(qs(r.backendName())).append(",\n");
         sb.append("    \"mode\": ").append(qs(r.backendMode().name())).append(",\n");
         sb.append("    \"isRealInference\": ").append(r.isRealInference()).append(",\n");
+        sb.append("    \"gpuOffloadRequested\": ").append(r.gpuOffloadRequested()).append(",\n");
+        sb.append("    \"gpuLayersRequested\": ").append(intNull(r.gpuLayersRequested())).append(",\n");
         sb.append("    \"gpuOffloadActive\": ").append(boolNull(r.gpuOffloadActive())).append("\n");
         sb.append("  },\n");
 
@@ -168,6 +170,8 @@ public final class BenchmarkExporter {
         cols.add(csvStr(r.backendName()));
         cols.add(csvStr(r.backendMode().name()));
         cols.add(csvBool(r.isRealInference()));
+        cols.add(csvBool(r.gpuOffloadRequested()));
+        cols.add(csvIntNull(r.gpuLayersRequested()));
         cols.add(csvBoolNull(r.gpuOffloadActive()));
         cols.add(csvStr(r.modelBasename()));
         cols.add(csvStr(r.quantHint()));

@@ -52,15 +52,17 @@ Useful as an upper bound on total end-to-end cost.
 
 ## Stub runs vs. real inference runs
 
-| Field | cpu-stub | llama.cpp | cuda/hip placeholder |
-|-------|----------|-----------|----------------------|
-| `is_real_inference` | `false` | `true` | `false` |
-| `backend_mode` | `CPU_STUB` | `LLAMA_CPP_REAL` | `CUDA_PLACEHOLDER` / `HIP_PLACEHOLDER` |
-| Real model | No | Yes (GGUF) | No |
-| Real GPU computation | No | No (CPU-only validated) | No |
-| `generated_tokens_last_run` | Exactly `requestedMaxNewTokens` | May be less (EOS token) | Exactly `requestedMaxNewTokens` |
-| `prompt_token_count` | Known (= `prompt_length`) | Unknown (`null`) | Known |
-| `model_load_time_ms` | null | null (in `wall_clock_ms`) | null |
+| Field | cpu-stub | llama.cpp (CPU) | llama.cpp (GPU offload requested) | cuda/hip placeholder |
+|-------|----------|-----------------|-----------------------------------|----------------------|
+| `is_real_inference` | `false` | `true` | `true` | `false` |
+| `backend_mode` | `CPU_STUB` | `LLAMA_CPP_REAL` | `LLAMA_CPP_REAL` | `CUDA_PLACEHOLDER` / `HIP_PLACEHOLDER` |
+| `gpu_offload_requested` | `false` | `false` | `true` | `false` |
+| `gpu_layers_requested` | null | null | e.g. `32` or `-1` | null |
+| `gpu_offload_active` | `false` | `false` | `null` (unknown) or `false` (CPU-only build) | `false` |
+| Real model | No | Yes (GGUF) | Yes (GGUF) | No |
+| Real GPU computation | No | No | Depends on native build | No |
+
+`gpu_offload_active` is `null` (unknown) when GPU offload was requested and no CPU-only warning was detected in llama.cpp output. It is `false` when the native build is CPU-only. It is never set to `true` because the Java binding does not expose a direct confirmation of GPU utilisation.
 
 Do not compare throughput numbers between `CPU_STUB` and `LLAMA_CPP_REAL` runs — they measure fundamentally different things.
 
@@ -175,11 +177,12 @@ java -jar tq-bench-cli/target/tq-bench-cli-*-fat.jar \
   --backend cpu-stub --prompt-len 256 --output-csv /tmp/bench-results.csv
 ```
 
-CSV columns (23):
+CSV columns (26):
 
 ```
 run_id, timestamp_utc, git_commit, backend_name, backend_mode,
-is_real_inference, gpu_offload_active, model_basename, quant_hint,
+is_real_inference, gpu_offload_requested, gpu_layers_requested, gpu_offload_active,
+model_basename, quant_hint,
 prompt_length, prompt_token_count, requested_max_new_tokens, context_tokens,
 warmup_iters, timed_iters, generated_tokens_last_run,
 latency_mean_ms, latency_min_ms, latency_p50_ms, latency_p99_ms, latency_max_ms,
@@ -210,6 +213,65 @@ Only compare runs with the same:
 - `prompt_length`
 - `model_basename` and `quant_hint` (for llama.cpp)
 - Similar `context_tokens`
+- Same `gpu_offload_requested` and `gpu_layers_requested` (for CPU vs GPU offload comparisons)
+
+---
+
+## GPU offload configuration (llama.cpp)
+
+GPU layer offload is requested via `--gpu-layers` on the CLI. This maps to llama.cpp's `nGpuLayers` parameter.
+
+| `--gpu-layers` value | Meaning |
+|----------------------|---------|
+| `0` (default) | CPU-only — no layers offloaded |
+| Positive integer | That many transformer layers offloaded to GPU |
+| `-1` | All layers offloaded (passed as 999 to llama.cpp) |
+
+### GPU offload status in exported results
+
+| `gpu_offload_requested` | `gpu_layers_requested` | `gpu_offload_active` | Interpretation |
+|-------------------------|------------------------|----------------------|----------------|
+| `false` | null | `false` | CPU-only run, offload not requested |
+| `true` | e.g. `32` | `false` | Offload requested but native build is CPU-only |
+| `true` | e.g. `32` | null | Offload requested; no CPU-only warning detected; actual GPU use unconfirmed |
+
+`gpu_offload_active` is never set to `true` — the `de.kherud:llama` binding does not expose a direct API to confirm GPU utilisation. Use the backend startup logs to investigate further.
+
+### CPU vs GPU offload comparison workflow
+
+```bash
+# CPU-only baseline
+java -jar tq-bench-cli/target/tq-bench-cli-*-fat.jar \
+  --backend llama.cpp \
+  --model-path /path/to/model.gguf \
+  --prompt "Once upon a time" \
+  --max-new-tokens 64 --context 2048 \
+  --warmup 2 --iters 10 \
+  --output-csv /tmp/gpu-comparison.csv
+
+# GPU offload run (requires GPU-enabled llama.cpp build)
+java -jar tq-bench-cli/target/tq-bench-cli-*-fat.jar \
+  --backend llama.cpp \
+  --model-path /path/to/model.gguf \
+  --prompt "Once upon a time" \
+  --max-new-tokens 64 --context 2048 \
+  --warmup 2 --iters 10 \
+  --gpu-layers -1 \
+  --output-csv /tmp/gpu-comparison.csv
+```
+
+Both rows land in the same CSV. Compare `generated_tokens_per_second_mean` across rows with matching `model_basename`, `requested_max_new_tokens`, and `context_tokens`.
+
+### Important distinction: llama.cpp GPU offload vs. future CUDA/HIP backends
+
+`--gpu-layers` controls llama.cpp's internal GPU offload. This is **not** the same as the future `tq-backend-cuda` / `tq-backend-hip` backends:
+
+| | llama.cpp `--gpu-layers` | future cuda/hip backends |
+|-|--------------------------|--------------------------|
+| Backend name | `llama.cpp` | `cuda` / `hip` |
+| Mechanism | llama.cpp internal offload | Custom C ABI (`tq_native_api.h`) + JNI |
+| Status | Configurable; activation depends on native build | Placeholder — no real GPU kernels yet |
+| Java API changes needed | None | None (already defined) |
 
 ---
 
@@ -217,7 +279,8 @@ Only compare runs with the same:
 
 | Limitation | Impact |
 |------------|--------|
-| CPU-only validation for llama.cpp | All llama.cpp throughput numbers are CPU-only; GPU offload is structurally wired but not validated |
+| GPU offload status is best-effort | `gpu_offload_active` is `null` (unknown) when offload is requested and no CPU-only warning is detected; never confirmed `true` |
+| CPU-only native build in `de.kherud:llama` | GPU offload requires a GPU-enabled llama.cpp build; the bundled JAR may be CPU-only depending on the version |
 | No prompt-eval vs. generation breakdown | `prompt_tokens_per_second` is always null; `latency_mean_ms` covers both phases |
 | No model load time isolation | Model load is included in `wall_clock_ms` but not broken out separately |
 | No KV cache metrics from llama.cpp | `kvCacheStats()` returns `KvCacheStats.empty()` for llama.cpp; KV metrics only populate for cpu-stub |

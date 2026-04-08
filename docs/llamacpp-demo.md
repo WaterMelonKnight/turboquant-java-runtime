@@ -152,10 +152,70 @@ It prints a brief benchmark summary including latency, throughput, and the gener
 
 ## Current limitations
 
-- **CPU-only.** GPU offload via llama.cpp (`nGpuLayers > 0`) is structurally wired but not validated. It requires a machine with a compatible GPU and a GPU-enabled native llama.cpp build.
+- **CPU-only validated.** GPU offload via llama.cpp (`nGpuLayers > 0`) is now configurable through `--gpu-layers`, but actual GPU activation depends on the native llama.cpp build bundled in `de.kherud:llama`. A CPU-only build silently ignores the setting. The backend logs a warning when GPU offload is requested but the CPU-only signal is detected.
+- **GPU offload status is best-effort.** The backend infers offload status from llama.cpp log output. If no CPU-only warning is detected, `gpuOffloadActive` is reported as `null` (unknown) rather than `true`, because the Java binding does not expose a direct API to confirm GPU utilisation.
 - **No tokenizer metrics.** The `de.kherud:llama` binding does not surface prompt token counts, so `promptTokenCount()` is reported as 0.
 - **No KV cache metrics.** llama.cpp manages its KV cache internally; the Java layer always receives `KvCacheStats.empty()`.
 - **Experimental stability.** Model loading errors, context overflow, and native crashes are possible with edge-case inputs or very large models.
+
+---
+
+## GPU offload configuration
+
+GPU layer offload is requested via `--gpu-layers`. This maps directly to llama.cpp's `nGpuLayers` parameter.
+
+```bash
+# CPU-only (default — no GPU offload)
+java -jar tq-bench-cli/target/tq-bench-cli-*-fat.jar \
+  --backend llama.cpp \
+  --model-path /path/to/model.gguf \
+  --prompt "Once upon a time" \
+  --max-new-tokens 64
+
+# Request GPU offload for 32 layers
+java -jar tq-bench-cli/target/tq-bench-cli-*-fat.jar \
+  --backend llama.cpp \
+  --model-path /path/to/model.gguf \
+  --prompt "Once upon a time" \
+  --max-new-tokens 64 \
+  --gpu-layers 32
+
+# Request offload for all layers
+java -jar tq-bench-cli/target/tq-bench-cli-*-fat.jar \
+  --backend llama.cpp \
+  --model-path /path/to/model.gguf \
+  --prompt "Once upon a time" \
+  --max-new-tokens 64 \
+  --gpu-layers -1
+```
+
+### How to tell whether GPU offload actually activated
+
+Check the backend startup logs:
+
+- **CPU-only build (offload unavailable):**
+  ```
+  WARN  LlamaCppBackend - GPU offload was requested (32 layers) but the native build
+        does not support it. Running CPU-only.
+  ```
+  The exported result will have `gpuOffloadActive: false`.
+
+- **GPU-capable build (offload may be active):**
+  ```
+  INFO  LlamaCppBackend - GPU offload requested (32 layers); no CPU-only warning detected.
+        Actual GPU utilisation depends on hardware and driver availability.
+  ```
+  The exported result will have `gpuOffloadActive: null` (unknown — the binding does not confirm GPU use directly).
+
+- **CPU-only run (not requested):**
+  ```
+  INFO  LlamaCppBackend - CPU-only (GPU offload not requested)
+  ```
+  The exported result will have `gpuOffloadRequested: false`, `gpuOffloadActive: false`.
+
+### Important distinction
+
+`--gpu-layers` controls llama.cpp's internal GPU offload mechanism. This is **not** the same as the future `tq-backend-cuda` or `tq-backend-hip` backends, which use a separate C ABI (`include/tq_native_api.h`) and are entirely independent backend tracks. See the table below.
 
 ---
 
@@ -166,11 +226,11 @@ The llama.cpp path is entirely independent of `tq-backend-cuda` and `tq-backend-
 | Backend | Status | How it works |
 |---------|--------|--------------|
 | `cpu-stub` | Working | Deterministic LCG, simulated KV cache. No model file. |
-| `llama.cpp` | Working (CPU) | Real GGUF model via `de.kherud:llama`. CPU-only validated. |
+| `llama.cpp` | Working (CPU validated; GPU offload configurable) | Real GGUF model via `de.kherud:llama`. GPU offload via `--gpu-layers`; actual activation depends on native build. |
 | `cuda` | Placeholder | Java shape + JNI bridge + mock C ABI. No real GPU kernels. |
 | `hip` | Placeholder | Same as CUDA, disabled by default. No real GPU kernels. |
 
-CUDA and HIP backends use a custom C ABI (`include/tq_native_api.h`) and are completely separate backend tracks. Implementing real CUDA or HIP kernels requires no changes to the Java API or to the llama.cpp path.
+CUDA and HIP backends use a custom C ABI (`include/tq_native_api.h`) and are completely separate backend tracks. Implementing real CUDA or HIP kernels requires no changes to the Java API or to the llama.cpp path. The `--gpu-layers` option has no effect on the cuda or hip backends.
 
 ---
 
